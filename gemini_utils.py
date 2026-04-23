@@ -74,7 +74,7 @@ def generate_questions(jd, resume):
     }
 
 
-import google.generativeai as genai
+# import google.generativeai as genai
 from PIL import Image
 import io
 import base64
