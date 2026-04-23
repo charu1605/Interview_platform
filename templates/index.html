@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Create Interview</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+
+<div class="container">
+    <h2>Create Interview</h2>
+
+    <form action="/create_interview" method="POST" enctype="multipart/form-data">
+        <textarea name="jd" placeholder="Paste Job Description" required></textarea>
+        <input type="file" name="resume" accept=".pdf" required>
+        <button type="submit">Create Interview Link</button>
+    </form>
+</div>
+<div style="margin-bottom: 20px; text-align: right;">
+    <a href="/dashboard" style="text-decoration: none; color: #3498db; font-weight: bold; border: 1px solid #3498db; padding: 10px 15px; border-radius: 5px;">
+        Go to Recruiter Dashboard →
+    </a>
+</div>
+
+</body>
+</html>

@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Face Detection Test</title>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface"></script>
+    <style>
+        body { font-family: sans-serif; text-align: center; background: #2c3e50; color: white; }
+        video { border: 5px solid #34495e; border-radius: 10px; width: 640px; transform: scaleX(-1); }
+        #status { font-size: 24px; margin: 20px; padding: 10px; border-radius: 5px; }
+        .safe { background: #27ae60; }
+        .warning { background: #e74c3c; animation: pulse 1s infinite; }
+        @keyframes pulse { 0% { opacity: 1; } 50% { opacity: 0.5; } 100% { opacity: 1; } }
+    </style>
+</head>
+<body>
+    <h1>Proctoring Scout Test</h1>
+    <div id="status" class="safe">Loading AI Model...</div>
+    <video id="webcam" autoplay playsinline></video>
+
+    <script>
+        const video = document.getElementById('webcam');
+        const statusDiv = document.getElementById('status');
+        let model;
+
+        async function setup() {
+            // 1. Start Camera
+            const stream = await navigator.mediaDevices.getUserMedia({ video: true });
+            video.srcObject = stream;
+
+            // 2. Load Model
+            statusDiv.innerText = "Model Loading...";
+            model = await blazeface.load();
+            statusDiv.innerText = "System Live: Show 2 faces to test";
+            
+            detect();
+        }
+
+        async function detect() {
+            const predictions = await model.estimateFaces(video, false);
+
+            if (predictions.length > 1) {
+                statusDiv.innerText = `⚠️ VIOLATION: ${predictions.length} Faces Detected!`;
+                statusDiv.className = "warning";
+            } else if (predictions.length === 1) {
+                statusDiv.innerText = "✅ 1 Person Detected (Clear)";
+                statusDiv.className = "safe";
+            } else {
+                statusDiv.innerText = "❓ No Face Detected";
+                statusDiv.className = "safe";
+            }
+
+            requestAnimationFrame(detect);
+        }
+
+        setup();
+    </script>
+</body>
+</html>

@@ -1,0 +1,555 @@
+<!-- <!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Recruiter Dashboard</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #f4f7f6; padding: 20px; }
+        .container { max-width: 1100px; margin: auto; }
+        .card { background: white; padding: 25px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); margin-bottom: 30px; }
+        h2 { color: #2c3e50; margin-top: 0; }
+        .form-group { margin-bottom: 15px; }
+        textarea, input[type="text"] { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 6px; box-sizing: border-box; }
+        .candidate-row { display: flex; gap: 10px; margin-bottom: 10px; align-items: center; }
+        
+        table { width: 100%; border-collapse: collapse; background: white; border-radius: 8px; overflow: hidden; margin-top: 10px; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #eee; }
+        th { background: #34495e; color: white; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 0.5px; }
+        
+        .status-badge { padding: 5px 12px; border-radius: 20px; font-size: 0.75rem; font-weight: bold; display: inline-block; }
+        .status-Pending { background: #ffeaa7; color: #d6a017; }
+        .status-Completed { background: #55efc4; color: #00b894; }
+        .status-Cancelled { background: #fab1a0; color: #c0392b; }
+        
+        .copy-btn { cursor: pointer; color: #3498db; border: none; background: none; font-weight: bold; font-size: 0.8rem; }
+        .copy-btn:hover { text-decoration: underline; }
+        .btn-add { background: #3498db; color: white; border: none; padding: 8px 15px; border-radius: 6px; cursor: pointer; margin-bottom: 15px; transition: 0.3s; }
+        .btn-add:hover { background: #2980b9; }
+        .btn-generate { background: #27ae60; color: white; padding: 12px 25px; border: none; border-radius: 6px; cursor: pointer; font-weight: bold; width: 100%; transition: 0.3s; }
+        .btn-generate:hover { background: #219150; }
+        
+        .link-text { color: #7f8c8d; font-family: monospace; font-size: 0.85rem; }
+    </style>
+</head>
+<nav style="background: #2c3e50; color: white; padding: 15px 30px; display: flex; justify-content: space-between; align-items: center; border-radius: 8px; margin-bottom: 30px;">
+    <div>
+        <h2 style="margin: 0; font-size: 1.2rem;color: #ffffff;">Welcome, {{ current_user.name }}</h2>
+        <span style="font-size: 0.8rem; opacity: 0.8;">Recruiter Portal</span>
+    </div>
+    <a href="/logout" style="background: #e74c3c; color: white; text-decoration: none; padding: 8px 15px; border-radius: 5px; font-weight: bold; font-size: 0.9rem; transition: 0.3s;">
+        Logout
+    </a>
+</nav>
+<body>
+
+<div class="container">
+    <div class="card">
+        <h2>Create New Interviews</h2>
+        <form action="/create_interview" method="POST" enctype="multipart/form-data">
+            <div class="form-group">
+                <label><strong>Job Description</strong></label>
+                <textarea name="jd" rows="4" placeholder="Paste the job requirements here..." required></textarea>
+            </div>
+            
+            <div id="candidate-list">
+                <label><strong>Candidates (Name & Resume)</strong></label>
+                <div class="candidate-row">
+                    <input type="text" name="candidate_names[]" placeholder="Candidate Name" required style="flex: 2;">
+                    <input type="file" name="resumes[]" accept=".pdf" required style="flex: 1;">
+                </div>
+            </div>
+            
+            <button type="button" class="btn-add" onclick="addCandidateRow()">+ Add Another Candidate</button>
+            <button type="submit" class="btn-generate">Generate Interview Links</button>
+        </form>
+    </div>
+
+    <div class="card">
+        <h2>Interview History</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>Candidate</th>
+                    <th>Status</th>
+                    <th>Integrity Check</th>
+                    <th>Interview Link</th>
+                    <th>Actions</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for interview in interviews %}
+                <tr>
+                    <td><strong>{{ interview.candidate_name }}</strong></td>
+                    <td>
+                        <span class="status-badge status-{{ interview.status }}">
+                            {{ interview.status }}
+                        </span>
+                    </td>
+                    <td>
+                        {% if interview.proctoring_flags %}
+                            {# Using the from_json filter we added to app.py #}
+                            {% set flags = interview.proctoring_flags | from_json %}
+                            {% if flags|length > 0 %}
+                                <span style="color: #c0392b; font-weight: bold;">⚠️ {{ flags|length }} Flags</span>
+                            {% else %}
+                                <span style="color: #27ae60;">✅ Clean</span>
+                            {% endif %}
+                        {% else %}
+                            <span style="color: #95a5a6;">--</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if not interview.is_used and interview.status != 'Cancelled' %}
+                            <span class="link-text" id="link-{{ interview.id }}">
+                                {{ url_for('start_interview', session_id=interview.session_id, _external=True) }}
+                            </span>
+                            <button class="copy-btn" onclick="copyLink('link-{{ interview.id }}')">📋 Copy</button>
+                        {% else %}
+                            <span style="color: #bdc3c7;">Link Expired / Inactive</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        {% if interview.status == 'Completed' %}
+                            <a href="{{ url_for('view_report', session_id=interview.session_id) }}" style="color: #3498db; font-weight: bold; text-decoration: none;">View Report</a>
+                        {% elif interview.status == 'Cancelled' %}
+                            <span style="color: #e74c3c; font-size: 0.8rem;">Review Violations</span>
+                        {% else %}
+                            <span style="color: #95a5a6;">Waiting...</span>
+                        {% endif %}
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+
+<script>
+    function addCandidateRow() {
+        const div = document.createElement('div');
+        div.className = 'candidate-row';
+        div.innerHTML = `
+            <input type="text" name="candidate_names[]" placeholder="Candidate Name" required style="flex: 2;">
+            <input type="file" name="resumes[]" accept=".pdf" required style="flex: 1;">
+        `;
+        document.getElementById('candidate-list').appendChild(div);
+    }
+
+    function copyLink(id) {
+        const text = document.getElementById(id).innerText;
+        navigator.clipboard.writeText(text).then(() => {
+            const btn = window.event.target;
+            const originalText = btn.innerText;
+            btn.innerText = "✅ Copied!";
+            setTimeout(() => { btn.innerText = originalText; }, 2000);
+        });
+    }
+</script>
+
+</body>
+</html>  -->
+
+
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Recruiter Dashboard</title>
+
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600&display=swap" rel="stylesheet">
+
+<style>
+
+*{
+margin:0;
+padding:0;
+box-sizing:border-box;
+font-family:'Poppins',sans-serif;
+}
+
+/* Background */
+
+body{
+min-height:100vh;
+padding:30px;
+background: linear-gradient(135deg,#4facfe,#00f2fe);
+}
+
+/* Container */
+
+.container{
+max-width:1100px;
+margin:auto;
+}
+
+/* Navbar */
+
+nav{
+background:rgba(255,255,255,0.15);
+backdrop-filter:blur(15px);
+color:white;
+padding:18px 30px;
+display:flex;
+justify-content:space-between;
+align-items:center;
+border-radius:14px;
+margin-bottom:30px;
+box-shadow:0 10px 30px rgba(0,0,0,0.2);
+}
+
+nav h2{
+font-size:1.2rem;
+font-weight:600;
+color:white;
+}
+
+nav span{
+font-size:0.8rem;
+opacity:0.9;
+}
+
+nav a{
+background:#e74c3c;
+color:white;
+text-decoration:none;
+padding:8px 16px;
+border-radius:6px;
+font-weight:500;
+font-size:0.9rem;
+transition:0.3s;
+}
+
+nav a:hover{
+background:#c0392b;
+}
+
+/* Glass Cards */
+
+.card{
+background:rgba(255,255,255,0.15);
+backdrop-filter:blur(15px);
+padding:30px;
+border-radius:16px;
+box-shadow:0 15px 35px rgba(0,0,0,0.2);
+margin-bottom:30px;
+color:white;
+}
+
+.card h2{
+margin-bottom:20px;
+font-weight:600;
+}
+
+/* Inputs */
+
+textarea,
+input[type="text"],
+input[type="file"]{
+width:100%;
+padding:12px;
+border:none;
+border-radius:8px;
+font-size:0.9rem;
+outline:none;
+margin-top:6px;
+}
+
+textarea{
+resize:none;
+}
+
+/* Candidate row */
+
+.candidate-row{
+display:flex;
+gap:10px;
+margin-bottom:10px;
+}
+
+/* Buttons */
+
+.btn-add{
+background:rgba(255,255,255,0.25);
+color:white;
+border:none;
+padding:8px 15px;
+border-radius:6px;
+cursor:pointer;
+margin-bottom:15px;
+transition:0.3s;
+}
+
+.btn-add:hover{
+background:rgba(255,255,255,0.35);
+}
+
+.btn-generate{
+width:100%;
+padding:14px;
+border:none;
+border-radius:8px;
+background:linear-gradient(135deg,#27ae60,#2ecc71);
+color:white;
+font-weight:600;
+cursor:pointer;
+transition:0.3s;
+}
+
+.btn-generate:hover{
+transform:translateY(-2px);
+box-shadow:0 8px 20px rgba(0,0,0,0.2);
+}
+
+/* Table */
+
+table{
+width:100%;
+border-collapse:collapse;
+margin-top:10px;
+color:white;
+}
+
+th{
+background:rgba(0,0,0,0.25);
+padding:12px;
+font-size:0.85rem;
+text-transform:uppercase;
+}
+
+td{
+padding:12px;
+border-bottom:1px solid rgba(255,255,255,0.2);
+font-size:0.9rem;
+}
+
+/* Status badges */
+
+.status-badge{
+padding:6px 14px;
+border-radius:20px;
+font-size:0.75rem;
+font-weight:600;
+display:inline-block;
+}
+
+.status-EarlySubmission {
+    background: #ffeaa7; /* Soft Orange/Yellow */
+    color: #e67e22;
+}
+
+
+.status-Pending{
+background:#ffeaa7;
+color:#d68910;
+}
+
+.status-Completed{
+background:#55efc4;
+color:#00695c;
+}
+
+.status-Cancelled{
+background:#fab1a0;
+color:#c0392b;
+}
+
+/* Link */
+
+.link-text{
+font-family:monospace;
+font-size:0.85rem;
+color:#ecf0f1;
+}
+
+.copy-btn{
+cursor:pointer;
+color:#ffffff;
+border:none;
+background:none;
+font-weight:600;
+font-size:0.8rem;
+margin-left:5px;
+}
+
+.copy-btn:hover{
+text-decoration:underline;
+}
+
+</style>
+</head>
+
+<body>
+
+<nav>
+<div>
+<h2>Welcome, {{ current_user.name }}</h2>
+<span>Recruiter Portal</span>
+</div>
+
+<a href="/logout" class="logout-btn">Logout</a>
+</nav>
+
+<div class="container">
+
+<div class="card">
+
+<h2>Create New Interviews</h2>
+
+<form action="/create_interview" method="POST" enctype="multipart/form-data">
+
+<div class="form-group">
+<label><strong>Job Description</strong></label>
+<textarea name="jd" rows="4" placeholder="Paste the job requirements here..." required></textarea>
+</div>
+
+<div id="candidate-list">
+
+<label><strong>Candidates (Name & Resume)</strong></label>
+
+<div class="candidate-row">
+<input type="text" name="candidate_names[]" placeholder="Candidate Name" required style="flex:2;">
+<input type="file" name="resumes[]" accept=".pdf" required style="flex:1;">
+</div>
+
+</div>
+
+<button type="button" class="btn-add" onclick="addCandidateRow()">+ Add Another Candidate</button>
+
+<button type="submit" class="btn-generate">Generate Interview Links</button>
+
+</form>
+
+</div>
+
+<div class="card">
+
+<h2>Interview History</h2>
+
+<table>
+
+<thead>
+<tr>
+<th>Candidate</th>
+<th>Status</th>
+<th>Integrity Check</th>
+<th>Interview Link</th>
+<th>Actions</th>
+</tr>
+</thead>
+
+<tbody>
+
+{% for interview in interviews %}
+
+<tr>
+
+<td><strong>{{ interview.candidate_name }}</strong></td>
+
+<td>
+<span class="status-badge status-{{ interview.status }}">
+{{ interview.status }}
+</span>
+</td>
+
+<td>
+
+{% if interview.proctoring_flags %}
+
+{% set flags = interview.proctoring_flags | from_json %}
+
+{% if flags|length > 0 %}
+<span style="color:#c0392b;font-weight:bold;">⚠️ {{ flags|length }} Flags</span>
+{% else %}
+<span style="color:#27ae60;">✅ Clean</span>
+{% endif %}
+
+{% else %}
+<span style="color:#95a5a6;">--</span>
+{% endif %}
+
+</td>
+
+<td>
+
+{% if not interview.is_used and interview.status != 'Cancelled' %}
+
+<span class="link-text" id="link-{{ interview.id }}">
+{{ url_for('start_interview', session_id=interview.session_id, _external=True) }}
+</span>
+
+<button class="copy-btn" onclick="copyLink('link-{{ interview.id }}')">📋 Copy</button>
+
+{% else %}
+
+<span style="color:#bdc3c7;">Link Expired / Inactive</span>
+
+{% endif %}
+
+</td>
+
+<td>
+    {% if interview.status in ['Completed', 'Early Submission'] %}
+        <a href="{{ url_for('view_report', session_id=interview.session_id) }}" 
+           style="color:#ffffff; background: rgba(52, 152, 219, 0.4); padding: 5px 10px; border-radius: 5px; font-weight:bold; text-decoration:none; font-size: 0.8rem;">
+           View Report
+        </a>
+    {% elif interview.status == 'Cancelled' %}
+        <a href="{{ url_for('view_report', session_id=interview.session_id) }}" 
+           style="color:#ff7675; font-size: 0.8rem; font-weight: bold; text-decoration: none;">
+           Review Violations
+        </a>
+    {% else %}
+        <span style="color:#ecf0f1; opacity: 0.6; font-size: 0.8rem;">Waiting...</span>
+    {% endif %}
+</td>
+
+</tr>
+
+{% endfor %}
+
+</tbody>
+
+</table>
+
+</div>
+
+</div>
+
+<script>
+
+function addCandidateRow(){
+
+const div=document.createElement('div');
+div.className='candidate-row';
+
+div.innerHTML=`
+<input type="text" name="candidate_names[]" placeholder="Candidate Name" required style="flex:2;">
+<input type="file" name="resumes[]" accept=".pdf" required style="flex:1;">
+`;
+
+document.getElementById('candidate-list').appendChild(div);
+
+}
+
+function copyLink(id){
+
+const text=document.getElementById(id).innerText;
+
+navigator.clipboard.writeText(text).then(()=>{
+
+const btn=window.event.target;
+const originalText=btn.innerText;
+
+btn.innerText="✅ Copied!";
+
+setTimeout(()=>{btn.innerText=originalText},2000);
+
+});
+
+}
+
+</script>
+
+</body>
+</html>

@@ -1,0 +1,689 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Live Interview Session</title>
+    <style>
+
+@keyframes blinker { 50% { opacity: 0.2; }}
+
+*{
+margin:0;
+padding:0;
+box-sizing:border-box;
+font-family:'Poppins',sans-serif;
+}
+
+/* Background */
+
+body{
+height:100vh;
+display:flex;
+justify-content:center;
+align-items:center;
+background: linear-gradient(135deg,#4facfe,#00f2fe);
+overflow:hidden;
+}
+
+/* Main container */
+
+#interview-container{
+width:95%;
+height:92vh;
+background:rgba(255,255,255,0.15);
+backdrop-filter:blur(15px);
+border-radius:18px;
+box-shadow:0 15px 40px rgba(0,0,0,0.25);
+padding:25px;
+display:flex;
+gap:25px;
+color:white;
+}
+
+/* LEFT SIDE (VIDEO) */
+
+.video-section{
+flex:1;
+display:flex;
+flex-direction:column;
+align-items:center;
+justify-content:center;
+}
+
+video{
+width:100%;
+max-height:60vh;
+border-radius:12px;
+background:black;
+transform:scaleX(-1);
+border:4px solid rgba(255,255,255,0.4);
+}
+
+/* RIGHT SIDE (QUESTION PANEL) */
+
+.interview-panel{
+flex:1.2;
+display:flex;
+flex-direction:column;
+justify-content:flex-start;
+}
+
+/* Status */
+
+#status-label{
+font-weight:600;
+letter-spacing:1px;
+margin-bottom:10px;
+}
+
+/* Timer */
+
+.timer-display{
+font-size:2.3rem;
+font-weight:bold;
+font-family:monospace;
+margin:10px 0;
+}
+
+/* Question */
+
+#question-box{
+font-size:1.2rem;
+font-weight:500;
+margin:15px 0;
+min-height:80px;
+}
+
+/* Controls */
+
+.controls{
+display:flex;
+flex-direction:column;
+gap:12px;
+margin-top:10px;
+}
+
+/* Input */
+
+#candidate-name{
+padding:12px;
+border-radius:8px;
+border:none;
+font-size:1rem;
+}
+
+/* Buttons */
+
+button{
+padding:12px;
+border:none;
+border-radius:8px;
+cursor:pointer;
+font-weight:600;
+color:white;
+font-size:0.95rem;
+}
+
+.btn-start{ background:#27ae60; }
+.btn-submit{ background:#e67e22; }
+.btn-next{ background:#8e44ad; }
+
+button:disabled{
+background:#bdc3c7;
+cursor:not-allowed;
+}
+
+/* Transcript */
+
+#transcript-box{
+margin-top:15px;
+padding:15px;
+background:rgba(255,255,255,0.2);
+border-left:5px solid white;
+border-radius:8px;
+min-height:70px;
+font-style:italic;
+}
+
+/* Warning */
+
+#proctor-warning{
+animation: blinker 1.5s linear infinite;
+margin-bottom:10px;
+}
+
+</style>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/blazeface"></script>
+</head>
+<body>
+
+<div id="interview-container">
+
+<div class="video-section">
+
+<div id="proctor-warning" style="display:none; color:white; background:#e74c3c; padding:10px; border-radius:8px; margin-bottom:10px; font-weight:bold;">
+⚠️ WARNING: Tab switching detected and logged!
+</div>
+
+<video id="webcam" autoplay playsinline muted></video>
+
+</div>
+
+
+<div class="interview-panel">
+
+<h2 id="status-label">System Ready</h2>
+
+<div id="timer" class="timer-display">00:00</div>
+
+<div id="question-box">Loading your interview profile...</div>
+
+<div class="controls">
+<input type="text" id="candidate-name" placeholder="Enter Your Full Name to Begin" required>
+
+<button id="main-action-btn" class="btn-start">Start Interview</button>
+
+<button id="next-btn" class="btn-next" style="display:none;">Next Question ➔</button>
+<button id="finishBtn" onclick="confirmEarlySubmit()" style="background: #e74c3c; margin-left: 10px; display:none;">Finish Early</button>
+</div>
+</div>
+
+<div id="transcript-box">
+Your verbal answers will appear here as text...
+</div>
+
+</div>
+
+</div>
+
+
+
+<script id="question-json" type="application/json">
+    {{ questions | tojson | safe }}
+</script>
+
+<script>
+    const sessionID = "{{ session_id }}";
+    const candidateNameInput = document.getElementById("candidate-name");
+    const warningBox = document.getElementById('proctor-warning');
+    const statusLabel = document.getElementById('status-label');
+    const timerDisplay = document.getElementById('timer');
+    const questionBox = document.getElementById('question-box');
+    const actionBtn = document.getElementById('main-action-btn');
+    const nextBtn = document.getElementById('next-btn');
+    const transcriptBox = document.getElementById('transcript-box');
+    const video = document.getElementById('webcam');
+    const MAX_ALLOWED_SWITCHES = 4;
+
+    // --- 1. DATA PARSING ---
+    let rawData;
+    try {
+        const jsonContent = document.getElementById("question-json").textContent;
+        rawData = JSON.parse(jsonContent);
+        if (typeof rawData === 'string') rawData = JSON.parse(rawData);
+    } catch (e) {
+        console.error("Data error", e);
+        rawData = {};
+    }
+
+    function getFlatQuestions(data) {
+        let questions = [];
+        const source = data.questions ? data.questions : data;
+        if (source.technical_questions) questions = questions.concat(source.technical_questions);
+        if (source.behavioral_questions) questions = questions.concat(source.behavioral_questions);
+        if (source.project_questions) questions = questions.concat(source.project_questions);
+        return questions.length === 0 && Array.isArray(source) ? source : questions;
+    }
+
+    const finalQuestionList = getFlatQuestions(rawData);
+    if (finalQuestionList.length > 0) {
+        questionBox.innerText = "Ready? Enter your name and click Start.";
+    } else {
+        questionBox.innerText = "Error: No questions found.";
+        actionBtn.disabled = true;
+    }
+
+    // --- 2. STATE ---
+    let currentIndex = 0;
+    let timerInterval;
+    let streamReference = null;
+    let interviewResults = []; 
+    let tabSwitchCount = 0;
+    let finalTranscript = "";
+    let scoutModel;
+    let faceViolationCounter = 0;
+    let multiFaceStrike = 0; 
+    let isInterviewActive = false;
+    const MAX_FACE_STRIKES = 4;
+    const PREP_TIME = 20; 
+    const RECORD_TIME = 120;
+
+    const recognition = new (window.SpeechRecognition || window.webkitSpeechRecognition)();
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+
+    // --- 3. PROCTORING & AUTO-CANCEL LOGIC  ---
+
+    let tabSwitchStartTime; // Variable to track when they left
+
+    document.addEventListener("visibilitychange", () => {
+        if (document.visibilityState === 'hidden' && isInterviewActive) {
+            // 1. Record the time they left
+            tabSwitchStartTime = Date.now();
+            tabSwitchCount++;
+
+            // 2. Check for Hard Limit
+            if (tabSwitchCount > MAX_ALLOWED_SWITCHES) {
+                cancelInterview("Excessive Tab Switching");
+            } else {
+                // 3. Show Warning
+                warningBox.style.display = 'block';
+                warningBox.style.background = '#e74c3c';
+                warningBox.innerText = `⚠️ WARNING: Tab switch detected! Violation #${tabSwitchCount}/${MAX_ALLOWED_SWITCHES + 1}. Interview will cancel at 5.`;
+
+                setTimeout(() => { warningBox.style.display = 'none'; }, 5000);
+            }
+        } else if (document.visibilityState === 'visible' && tabSwitchStartTime && isInterviewActive) {
+            // 4. When they return, calculate how long they were away
+            const durationAway = Math.round((Date.now() - tabSwitchStartTime) / 1000);
+            
+            // 5. Log the violation WITH duration to the backend
+            fetch(`/log_violation/${sessionID}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ 
+                    type: "Tab Switch", 
+                    count: tabSwitchCount,
+                    details: `Away for ${durationAway} seconds`
+                })
+            });
+            
+            // Reset start time for next switch
+            tabSwitchStartTime = null;
+        }
+    });
+
+
+    function saveCurrentAnswer() {
+        if (statusLabel.innerText === "🔴 Recording...") {
+            let currentResp = transcriptBox.innerText;
+            // Don't save if it's just the placeholder text
+            if (currentResp === "Listening..." || !currentResp) {
+                currentResp = "No answer detected.";
+            }
+            interviewResults.push({
+                "question": finalQuestionList[currentIndex],
+                "answer": currentResp
+            });
+        }
+    }
+
+    async function confirmEarlySubmit() {
+        if (!isInterviewActive) return;
+        const confirmed = window.confirm("Are you sure you want to end the interview now? Your progress will be saved.");
+        if (confirmed) {
+            saveCurrentAnswer(); 
+            await sendAnswersToBackend(); // Use your existing send function
+        }
+    }
+
+    async function cancelInterview(reason) {
+        isInterviewActive = false;
+        if (streamReference) {
+            streamReference.getTracks().forEach(track => track.stop());
+            video.srcObject = null;
+        }
+        clearInterval(timerInterval);
+        try { recognition.stop(); } catch(e) {}
+
+        await fetch(`/cancel_interview/${sessionID}`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ reason: reason })
+        });
+
+        document.getElementById('interview-container').innerHTML = `
+            <div style="padding: 40px; border: 3px solid #c0392b; border-radius:15px; background: #fff5f5;">
+                <h1 style="color: #c0392b;">❌ Interview Terminated</h1>
+                <p>Reason: <strong>${reason}</strong></p>
+                <p>Your interview has been automatically cancelled due to security violations.</p>
+                <div style="font-size: 5rem; margin-top:20px;">🚫</div>
+            </div>
+        `;
+    }
+
+
+    // --- PROCTORING: HYBRID FACE DETECTION ---
+
+    // Load the model as soon as the page is ready
+    async function setupScout() {
+        try {
+            scoutModel = await blazeface.load();
+            console.log("Scout Model (BlazeFace) Loaded");
+        } catch (e) {
+            console.error("Failed to load BlazeFace", e);
+        }
+    }
+    setupScout();
+
+    
+let localSuspiciousCounter = 0; // Tracks consecutive detections
+const ESCALATION_THRESHOLD = 3; // Number of continuous hits before calling AI
+
+async function runFaceAudit() {
+    // 1. Lifecycle Checks
+    if (!isInterviewActive) {
+        setTimeout(runFaceAudit, 2000);
+        return;
+    }
+
+    if (!scoutModel || video.readyState < 2) {
+        setTimeout(runFaceAudit, 1000);
+        return;
+    }
+
+    try {
+        // 2. Perform Local Face Detection (The Scout - Free/Fast)
+        const predictions = await scoutModel.estimateFaces(video, false);
+        
+        if (predictions.length > 1) {
+            localSuspiciousCounter++;
+            console.warn(`⚠️ Scout Warning ${localSuspiciousCounter}/${ESCALATION_THRESHOLD}: Multi-face detected.`);
+
+            // UI Feedback: Visual warning for the candidate
+            video.style.border = "5px solid #f39c12"; // Orange
+            warningBox.style.display = 'block';
+            warningBox.style.background = '#f39c12';
+            warningBox.innerText = `⚠️ WARNING: Multiple faces detected. Please ensure your background is plain. (${localSuspiciousCounter}/${ESCALATION_THRESHOLD})`;
+
+            // 3. Only Escalate to LLM if the violation persists
+            if (localSuspiciousCounter >= ESCALATION_THRESHOLD) {
+                console.log("🚀 ESCALATING TO AI JUDGE: Continuous violation detected.");
+                warningBox.innerText = "🚨 Verifying with AI Judge... Please stay still.";
+                
+                await triggerAIJudge(); // Call the LLM Judge
+                
+                // Reset counter after AI Audit to start the next cycle
+                localSuspiciousCounter = 0; 
+            }
+        } else {
+            // ✅ CLEAR ENVIRONMENT: Reset counter if they are alone
+            localSuspiciousCounter = 0;
+            video.style.border = "4px solid #ddd"; 
+            
+            // Hide box if it was showing a face/AI warning
+            if (warningBox.innerText.includes("faces") || warningBox.innerText.includes("AI") || warningBox.innerText.includes("background")) {
+                warningBox.style.display = 'none';
+            }
+        }
+    } catch (err) {
+        console.error("❌ Scout Runtime Error:", err);
+    }
+
+    // Interval: 3 seconds for local check (LLM check only happens on escalation)
+    setTimeout(runFaceAudit, 3000);
+}
+
+// Helper function to handle the LLM request
+async function triggerAIJudge() {
+    const canvas = document.createElement('canvas');
+    canvas.width = video.videoWidth;
+    canvas.height = video.videoHeight;
+    canvas.getContext('2d').drawImage(video, 0, 0);
+    const imageData = canvas.toDataURL('image/jpeg');
+
+    try {
+        const response = await fetch(`/audit_face_violation/${sessionID}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ image: imageData })
+        });
+
+        const result = await response.json();
+
+        if (result.verdict === "TERMINATE") {
+            isInterviewActive = false;
+            alert("Interview Terminated: Multiple people confirmed by AI Judge.");
+            window.location.href = "/";
+        } else if (result.verdict === "FLAGGED") {
+            // AI saw a person but we haven't hit the 3-strike threshold in the DB yet
+            video.style.border = "5px solid #e74c3c"; // Red
+            warningBox.style.background = '#e74c3c';
+            warningBox.innerText = `🚨 AI CONFIRMED VIOLATION: Violation #${result.current_count} logged.`;
+        }
+    } catch (e) {
+        console.error("AI Audit Fetch Error:", e);
+    }
+}
+
+
+
+    async function verifyAndCancel() {
+        // 1. Capture the image for the Judge (Gemini Pro)
+        const canvas = document.createElement('canvas');
+        canvas.width = video.videoWidth;
+        canvas.height = video.videoHeight;
+        canvas.getContext('2d').drawImage(video, 0, 0);
+        const imageData = canvas.toDataURL('image/jpeg');
+
+        statusLabel.innerText = "🔍 AI Verifying Environment...";
+
+        // 2. Send to Backend
+        try {
+            const response = await fetch(`/audit_face_violation/${sessionID}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ image: imageData })
+            });
+            const data = await response.json();
+
+            if (data.verdict === "TERMINATE") {
+                cancelInterview("Multiple People Detected (Verified by AI)");
+            } else {
+                // False alarm! Reset strikes
+                multiFaceStrike = 0;
+                warningBox.style.display = 'none';
+                statusLabel.innerText = "✅ Environment Clear";
+                runFaceAudit(); // Resume auditing
+            }
+        } catch (error) {
+            console.error("Audit failed", error);
+            runFaceAudit(); // Resume on error
+        }
+    }
+
+
+// --- 4. INTERVIEW LOGIC ---
+
+    // THE INITIAL START BUTTON
+    actionBtn.onclick = async () => {
+        const name = candidateNameInput.value.trim();
+        if (!name) {
+            alert("Please enter your name.");
+            return;
+        }
+
+        try {
+            // 1. Warm up the Speech Engine immediately
+            const warmup = new SpeechSynthesisUtterance("");
+            window.speechSynthesis.speak(warmup);
+            // 2. Initialize Hardware
+            streamReference = await navigator.mediaDevices.getUserMedia({ video: true, audio: true });
+            video.srcObject = streamReference;
+             isInterviewActive = true; 
+
+            // 3. Start Proctoring Scout
+            runFaceAudit(); 
+
+            // 4. UI Transition
+            actionBtn.style.display = 'none';
+            candidateNameInput.style.display = 'none';
+            statusLabel.innerText = "System Live";
+            
+            // 5. Start the first question
+        
+            document.getElementById('finishBtn').style.display = 'inline-block';
+            loadQuestion();
+            
+        } catch (err) {
+            console.error(err);
+            alert("Permission for Camera and Microphone is required to proceed.");
+        }
+    };
+
+    function loadQuestion() {
+        if (currentIndex >= finalQuestionList.length) {
+            sendAnswersToBackend();
+            return;
+        }
+        const q = finalQuestionList[currentIndex];
+        questionBox.innerText = q;
+        transcriptBox.innerText = "Listening for your response...";
+        nextBtn.style.display = 'none';
+        speak(q);
+    }
+
+    function speak(text) {
+        statusLabel.innerText = "🔊 System Speaking...";
+        const utterance = new SpeechSynthesisUtterance(text);
+        utterance.onend = () => { startPrepTimer(); };
+        window.speechSynthesis.speak(utterance);
+    }
+
+    function startPrepTimer() {
+        statusLabel.innerText = "⏳ Thinking Time";
+        actionBtn.innerText = "Start Recording Now";
+        actionBtn.className = "btn-start";
+        actionBtn.style.display = 'inline-block';
+        
+        let timeLeft = PREP_TIME;
+        updateTimerDisplay(timeLeft);
+
+        // RE-ASSIGN CLICK: This now handles the transition to recording
+        actionBtn.onclick = () => { 
+            clearInterval(timerInterval); 
+            startRecording(); 
+        };
+
+        timerInterval = setInterval(() => {
+            timeLeft--;
+            updateTimerDisplay(timeLeft);
+            if (timeLeft <= 0) { 
+                clearInterval(timerInterval); 
+                startRecording(); 
+            }
+        }, 1000);
+    }
+
+    function startRecording() {
+        finalTranscript = ""; 
+        statusLabel.innerText = "🔴 Recording...";
+        actionBtn.innerText = "Submit Answer Early";
+        actionBtn.className = "btn-submit";
+        transcriptBox.innerText = "Listening...";
+        
+        try { recognition.stop(); } catch (e) {}
+
+        setTimeout(() => {
+            try { recognition.start(); } catch (e) { console.error(e); }
+        }, 250);
+
+        let timeLeft = RECORD_TIME;
+        updateTimerDisplay(timeLeft);
+
+        // RE-ASSIGN CLICK: This now handles submitting early
+        actionBtn.onclick = () => stopRecording();
+
+        timerInterval = setInterval(() => {
+            timeLeft--;
+            updateTimerDisplay(timeLeft);
+            if (timeLeft <= 0) stopRecording();
+        }, 1000);
+    }
+
+
+
+
+    recognition.onresult = (event) => {
+        let interimTranscript = "";
+        for (let i = event.resultIndex; i < event.results.length; ++i) {
+            let transcriptPart = event.results[i][0].transcript;
+            if (event.results[i].isFinal) finalTranscript += transcriptPart + " ";
+            else interimTranscript += transcriptPart;
+        }
+        transcriptBox.innerText = finalTranscript + interimTranscript;
+    };
+
+    recognition.onend = () => {
+    if (statusLabel.innerText === "🔴 Recording...") {
+        console.log("Speech recognition timed out. Restarting...");
+        try {
+            recognition.start();
+        } catch (e) {
+            console.error("Restart failed:", e);
+        }
+    }
+};
+
+    function stopRecording() {
+        clearInterval(timerInterval);
+        const finalResponse = transcriptBox.innerText || "No answer detected.";
+        recognition.stop();
+        interviewResults.push({
+            "question": finalQuestionList[currentIndex],
+            "answer": transcriptBox.innerText || "No answer detected."
+        });
+        finalTranscript = "";
+        statusLabel.innerText = "✅ Response Saved";
+        actionBtn.style.display = 'none';
+        nextBtn.style.display = 'inline-block';
+        if (currentIndex === finalQuestionList.length - 1) {
+            nextBtn.innerText = "Finalize & Submit ➔";
+            nextBtn.style.background = "#27ae60"; // Change to green
+            nextBtn.onclick = () => { sendAnswersToBackend(); };
+        } else {
+            nextBtn.innerText = "Next Question ➔";
+            nextBtn.onclick = () => { currentIndex++; loadQuestion(); };
+        }
+    }
+
+    async function sendAnswersToBackend() {
+        isInterviewActive = false; // STOP PROCTORING
+        statusLabel.innerText = "📤 Finalizing...";
+        if (streamReference) {
+            streamReference.getTracks().forEach(track => track.stop());
+            video.srcObject = null;
+        }
+        try {
+            const response = await fetch(`/submit_answer/${sessionID}`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ 
+                    answers: interviewResults,
+                    candidate_name: candidateNameInput.value
+                })
+            });
+            if (response.ok) {
+    // Hide the early finish button specifically
+                    document.getElementById('finishBtn').style.display = 'none';
+                    document.getElementById('interview-container').innerHTML = `
+                        <div style="padding: 40px; border: 2px solid #27ae60; border-radius:15px; text-align:center; width:100%;">
+                            <h1 style="color: #27ae60;">✔ Interview Submitted</h1>
+                            <p>Thank you, ${candidateNameInput.value}. Your session is complete.</p>
+                            <div style="font-size: 4rem; margin-top:20px;">🎉</div>
+                        </div>`;
+                }
+        } catch (error) { statusLabel.innerText = "❌ Upload Error."; }
+    }
+
+    function updateTimerDisplay(seconds) {
+        const m = Math.floor(seconds / 60);
+        const s = seconds % 60;
+        timerDisplay.innerText = `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
+    }
+</script>
+</body>
+</html>

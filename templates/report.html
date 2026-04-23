@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Interview Report | {{ interview.candidate_name }}</title>
+    <style>
+        body { font-family: 'Segoe UI', sans-serif; background: #eef2f3; padding: 40px; color: #333; }
+        .report-card { max-width: 900px; margin: auto; background: white; padding: 40px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.1); }
+        
+        .header { display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #eee; margin-bottom: 25px; padding-bottom: 15px; }
+        .back-link { text-decoration: none; color: #3498db; font-weight: bold; font-size: 0.9rem; }
+        
+        /* STATUS BADGE */
+        .status-banner { padding: 15px; border-radius: 10px; margin-bottom: 25px; font-weight: 600; display: flex; align-items: center; gap: 10px; }
+        .banner-early { background: #fff3cd; color: #856404; border: 1px solid #ffeeba; }
+        .banner-cancelled { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .banner-completed { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+
+        /* AI EVALUATION BOX */
+        .ai-eval-box { margin-bottom: 35px; border: 2px solid #3498db; padding: 30px; border-radius: 12px; background: #f0f7ff; position: relative; }
+        .score-container { display: flex; gap: 15px; margin-bottom: 25px; }
+        .score-card { text-align: center; flex: 1; background: white; padding: 20px; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); border-top: 5px solid #3498db; }
+        .score-val { font-size: 2.5rem; font-weight: bold; margin-top: 5px; }
+        
+        /* COLORS FOR SCORES */
+        .high-score { color: #27ae60; border-color: #27ae60; }
+        .mid-score { color: #f39c12; border-color: #f39c12; }
+        .low-score { color: #c0392b; border-color: #c0392b; }
+
+        .list-section { margin-top: 15px; }
+        .list-item { margin-bottom: 8px; line-height: 1.5; }
+
+        /* PROCTORING SECTION */
+        .violation-table { width: 100%; border-collapse: collapse; margin-top: 10px; background: white; border-radius: 8px; overflow: hidden; }
+        .violation-table th, .violation-table td { padding: 12px; text-align: left; border-bottom: 1px solid #fee2e2; }
+        .violation-table th { background: #fff5f5; color: #c53030; font-size: 0.8rem; text-transform: uppercase; }
+
+        /* TRANSCRIPT */
+        .q-pair { margin-bottom: 25px; padding: 20px; border-left: 6px solid #3498db; background: #fdfdfd; border-radius: 0 8px 8px 0; }
+        .question { font-weight: bold; color: #2c3e50; font-size: 1.1rem; display: block; margin-bottom: 10px; }
+        .answer { line-height: 1.6; color: #444; }
+        .silent-answer { color: #95a5a6; font-style: italic; background: #f1f1f1; padding: 4px 10px; border-radius: 4px; }
+    </style>
+</head>
+<body>
+
+<div class="report-card">
+    <div class="header">
+        <div>
+            <h1 style="margin:0; color:#2c3e50;">Interview Report</h1>
+            <p style="color:#7f8c8d; margin:5px 0 0 0;">Candidate: <strong>{{ interview.candidate_name }}</strong></p>
+        </div>
+        <a href="/dashboard" class="back-link">← Back to Dashboard</a>
+    </div>
+
+    {% if interview.status == "Early Submission" %}
+        <div class="status-banner banner-early">
+            <span>⚠️</span> Early Submission: Candidate finished before answering all questions.
+        </div>
+    {% elif interview.status == "Cancelled" %}
+        <div class="status-banner banner-cancelled">
+            <span>🚫</span> Cancelled: Session terminated due to security violations.
+        </div>
+    {% endif %}
+
+    <div style="display: flex; justify-content: space-between; margin-bottom: 30px; font-size: 0.9rem; color: #666;">
+        <span><strong>Session ID:</strong> {{ interview.session_id }}</span>
+        <span><strong>Date:</strong> {{ interview.created_at.strftime('%B %d, %Y') }}</span>
+    </div>
+
+    <div class="ai-eval-box">
+        <h3 style="color: #2c3e50; margin-top: 0; display: flex; align-items: center; gap: 10px;">
+            <span>✨</span> AI Performance Analysis
+        </h3>
+        
+        {% if interview.evaluation_json %}
+            {% set eval = interview.evaluation_json | from_json %}
+            <div class="score-container">
+                <div class="score-card {% if eval.technical_score|int >= 7 %}high-score{% elif eval.technical_score|int >= 4 %}mid-score{% else %}low-score{% endif %}">
+                    <h4 style="margin: 0; color: #7f8c8d;">Technical</h4>
+                    <div class="score-val">{{ eval.technical_score }}/10</div>
+                </div>
+                <div class="score-card {% if eval.integrity_score|int >= 8 %}high-score{% elif eval.integrity_score|int >= 5 %}mid-score{% else %}low-score{% endif %}">
+                    <h4 style="margin: 0; color: #7f8c8d;">Integrity</h4>
+                    <div class="score-val">{{ eval.integrity_score }}/10</div>
+                </div>
+                <div class="score-card {% if eval.communication_score|int >= 7 %}high-score{% elif eval.communication_score|int >= 4 %}mid-score{% else %}low-score{% endif %}">
+                    <h4 style="margin: 0; color: #7f8c8d;">Communication</h4>
+                    <div class="score-val">{{ eval.communication_score }}/10</div>
+                </div>
+            </div>
+
+            <div class="list-section">
+                <p><strong>🚀 Key Strengths:</strong></p>
+                <ul style="padding-left: 20px;">
+                    {% for strength in eval.strengths %}<li class="list-item">{{ strength }}</li>{% endfor %}
+                </ul>
+            </div>
+
+            <div class="list-section">
+                <p><strong>⚠️ Areas for Growth:</strong></p>
+                <ul style="padding-left: 20px;">
+                    {% for weakness in eval.weaknesses %}<li class="list-item">{{ weakness }}</li>{% endfor %}
+                </ul>
+            </div>
+
+            <div style="background: white; padding: 20px; border-radius: 10px; border-left: 5px solid #3498db; margin-top: 20px;">
+                <strong style="color:#3498db;">💡 AI Recommendation:</strong> 
+                <p>{{ eval.overall_recommendation }}</p>
+            </div>
+
+        {% elif interview.status == "Early Submission" %}
+            <div style="text-align: center; padding: 20px; color: #7f8c8d;">
+                <p><i>AI Evaluation is disabled for early submissions to preserve API accuracy.</i></p>
+            </div>
+        {% elif interview.status == "Cancelled" %}
+            <div style="text-align: center; padding: 20px; color: #c0392b;">
+                <p>Evaluation unavailable for terminated sessions.</p>
+            </div>
+        {% else %}
+            <div style="text-align: center; padding: 20px;">
+                <form action="/evaluate/{{ interview.session_id }}" method="POST">
+                    <button type="submit" style="background: #3498db; color: white; padding: 14px 30px; border: none; border-radius: 8px; cursor: pointer; font-weight: bold;">
+                        Run Gemini AI Analysis
+                    </button>
+                </form>
+            </div>
+        {% endif %}
+    </div>
+
+    <div class="proctor-section">
+        <h3 style="color: #2c3e50;">🛡️ Proctoring & Integrity Summary</h3>
+        {% if flags %}
+            <div style="background: #fff5f5; border: 1px solid #feb2b2; padding: 20px; border-radius: 10px;">
+                <p style="color: #c53030; font-weight: bold; font-size: 1.1rem;">
+                    ⚠️ Warning: {{ flags|length }} violations recorded.
+                </p>
+                <table class="violation-table">
+                    <thead>
+                        <tr><th>Time</th><th>Violation Type</th><th>Details</th></tr>
+                    </thead>
+                    <tbody>
+                        {% for flag in flags %}
+                        <tr>
+                            <td>{{ flag.timestamp }}</td>
+                            <td style="color: #c53030; font-weight: bold;">{{ flag.violation }}</td>
+                            <td>{{ flag.details }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        {% else %}
+            <div style="background: #f0fff4; border: 1px solid #9ae6b4; padding: 15px; border-radius: 10px; color: #276749;">
+                ✅ Clean Session: No focus or environment violations detected.
+            </div>
+        {% endif %}
+    </div>
+
+    <div class="transcript-section">
+        <h3 style="color: #2c3e50; border-bottom: 2px solid #eee; padding-bottom: 10px;">📝 Interview Transcript</h3>
+        {% for question, answer in answered_pairs %}
+        <div class="q-pair">
+            <span class="question">Q: {{ question }}</span>
+            <div class="answer">
+                <strong>A:</strong> 
+                {% if answer == "No answer detected." or not answer %}
+                    <span class="silent-answer">No response recorded.</span>
+                {% else %}
+                    {{ answer }}
+                {% endif %}
+            </div>
+        </div>
+        {% endfor %}
+    </div>
+</div>
+
+</body>
+</html>

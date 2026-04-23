@@ -1,0 +1,8 @@
+Flask
+Flask-SQLAlchemy
+Flask-Login
+google-genai
+Pillow
+pypdf
+gunicorn
+python-dotenv

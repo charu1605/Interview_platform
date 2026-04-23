@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AI Judge - Webcam Test Lab</title>
+    <style>
+        body { font-family: sans-serif; text-align: center; background: #f0f2f5; padding: 20px; }
+        video { border: 5px solid #333; border-radius: 10px; width: 640px; background: #000; }
+        .controls { margin-top: 20px; }
+        button { padding: 15px 30px; font-size: 1.1rem; cursor: pointer; background: #3498db; color: white; border: none; border-radius: 5px; }
+        #result { margin-top: 20px; font-size: 2rem; font-weight: bold; }
+        .STAY { color: #27ae60; }
+        .TERMINATE { color: #e74c3c; }
+    </style>
+</head>
+<body>
+    <h1>AI Judge - Webcam Test Lab</h1>
+    <video id="video" autoplay playsinline></video>
+    
+    <div class="controls">
+        <button onclick="captureAndTest()">📸 Run AI Audit Now</button>
+    </div>
+
+    <div id="result">Result: ---</div>
+
+    <script>
+        const video = document.getElementById('video');
+        const resultDiv = document.getElementById('result');
+
+        // Start Webcam
+        navigator.mediaDevices.getUserMedia({ video: true })
+            .then(stream => { video.srcObject = stream; });
+
+        async function captureAndTest() {
+            resultDiv.innerText = "⏳ Judging...";
+            resultDiv.className = "";
+
+            // 1. Capture Frame
+            const canvas = document.createElement('canvas');
+            canvas.width = video.videoWidth;
+            canvas.height = video.videoHeight;
+            canvas.getContext('2d').drawImage(video, 0, 0);
+            const imageData = canvas.toDataURL('image/jpeg');
+
+            // 2. Send to Test Route
+            const response = await fetch('/test_audit', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ image: imageData })
+            });
+
+            const data = await response.json();
+            
+            // 3. Display Result
+            resultDiv.innerText = "Verdict: " + data.verdict;
+            resultDiv.className = data.verdict;
+        }
+    </script>
+</body>
+</html>
