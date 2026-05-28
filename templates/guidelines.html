@@ -3,142 +3,99 @@
 <head>
     <title>Interview Guidelines</title>
     <style>
-
-*{
-margin:0;
-padding:0;
-box-sizing:border-box;
-font-family:'Poppins',sans-serif;
-}
-
-/* Background */
-
-body{
-height:100vh;
-display:flex;
-justify-content:center;
-align-items:center;
-background:linear-gradient(135deg,#4facfe,#00f2fe);
-}
-
-/* Glass Card */
-
-.box{
-background:rgba(255,255,255,0.15);
-backdrop-filter:blur(15px);
-padding:40px;
-border-radius:18px;
-box-shadow:0 15px 40px rgba(0,0,0,0.25);
-max-width:520px;
-color:white;
-}
-
-/* Heading */
-
-h2{
-margin-bottom:10px;
-font-weight:600;
-}
-
-/* Paragraph */
-
-p{
-margin-bottom:20px;
-opacity:0.9;
-}
-
-/* List */
-
-ul{
-padding-left:20px;
-line-height:1.9;
-margin-bottom:20px;
-}
-
-ul li{
-margin-bottom:6px;
-}
-
-/* Warning */
-
-.warning{
-color:#d42d24;
-font-weight:600;
-}
-
-/* Checkbox section */
-
-label{
-display:flex;
-align-items:center;
-gap:10px;
-margin-top:10px;
-font-size:0.9rem;
-}
-
-input[type="checkbox"]{
-width:16px;
-height:16px;
-cursor:pointer;
-}
-
-/* Start button */
-
-.btn{
-display:block;
-width:100%;
-padding:14px;
-background:linear-gradient(135deg,#27ae60,#2ecc71);
-color:white;
-text-align:center;
-text-decoration:none;
-border-radius:8px;
-font-weight:600;
-margin-top:25px;
-transition:0.3s;
-}
-
-.btn:hover{
-transform:translateY(-2px);
-box-shadow:0 8px 20px rgba(0,0,0,0.2);
-}
-
-</style>
+        * { margin:0; padding:0; box-sizing:border-box; font-family:'Poppins',sans-serif; }
+        body { height:100vh; display:flex; justify-content:center; align-items:center; background:linear-gradient(135deg,#4facfe,#00f2fe); }
+        .box { background:rgba(255,255,255,0.15); backdrop-filter:blur(15px); padding:40px; border-radius:18px; box-shadow:0 15px 40px rgba(0,0,0,0.25); max-width:520px; color:white; }
+        h2 { margin-bottom:10px; font-weight:600; }
+        p { margin-bottom:20px; opacity:0.9; }
+        ul { padding-left:20px; line-height:1.9; margin-bottom:20px; }
+        ul li { margin-bottom:6px; }
+        .warning { color:#d42d24; font-weight:600; }
+        label { display:flex; align-items:center; gap:10px; margin-top:10px; font-size:0.9rem; }
+        input[type="checkbox"] { width:16px; height:16px; cursor:pointer; }
+        
+        /* Updated Button Style */
+        .btn {
+            display:block;
+            width:100%;
+            padding:14px;
+            background:linear-gradient(135deg,#27ae60,#2ecc71);
+            color:white;
+            text-align:center;
+            border: none;
+            border-radius:8px;
+            font-weight:600;
+            margin-top:25px;
+            transition:0.3s;
+            cursor: pointer;
+            font-size: 1rem;
+        }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn:hover:not(:disabled) { transform:translateY(-2px); box-shadow:0 8px 20px rgba(0,0,0,0.2); }
+    </style>
 </head>
 <body>
     <div class="box">
-    <h2>Hello, {{ name }}!</h2>
-    <p>Please ensure your environment is ready before starting.</p>
-    
-    <ul>
-        <li><strong>Camera Access:</strong> Your camera must remain ON and your face clearly visible.</li>
-        <li><strong>Plain Background:</strong> Sit against a <b>solid, plain wall</b>. Background objects/people trigger audits.</li>
-        <li><strong>No Tab Switching:</strong> Leaving this window will be logged as a violation.</li>
-        <li class="warning">3 AI-Confirmed violations will result in automatic termination.</li>
-    </ul>
+        <h2>Hello, {{ name }}!</h2>
+        <p>Please ensure your environment is ready before starting.</p>
+        
+        <ul>
+            <li><strong>Camera Access:</strong> Your camera must remain ON and your face clearly visible.</li>
+            <li><strong>Plain Background:</strong> Sit against a <b>solid, plain wall</b>. Background objects/people trigger audits.</li>
+            <li><strong>No Tab Switching:</strong> Leaving this window will be logged as a violation.</li>
+            <li class="warning">3 AI-Confirmed violations will result in automatic termination.</li>
+        </ul>
 
-    <div style="background: rgba(255,255,255,0.1); padding: 10px; border-radius: 8px; font-size: 0.85rem; border-left: 4px solid #f39c12; margin-bottom: 15px;">
-        💡 <strong>Tip:</strong> Remove posters or photos behind you to avoid accidental AI flags.
-    </div>
+        <div style="background: rgba(255,255,255,0.1); padding: 10px; border-radius: 8px; font-size: 0.85rem; border-left: 4px solid #f39c12; margin-bottom: 15px;">
+            💡 <strong>Tip:</strong> Remove posters or photos behind you to avoid accidental AI flags.
+        </div>
 
-    <label>
-        <input type="checkbox" id="consent"> I understand and agree to the terms.
+        <label>
+            <input type="checkbox" id="consent"> I understand and agree to the terms.
+        </label>
+        <label>
+        <input type="checkbox" id="recordConsent">
+        I consent to video and audio recording during this interview for evaluation, quality review, and recruitment purposes.
     </label>
-    <a href="#" id="startLink" class="btn" style="opacity: 0.5; pointer-events: none;">Start Interview</a>
-</div>
+        
+        <button id="startBtn" class="btn" disabled>Start Interview</button>
+    </div>
 
     <script>
         const checkbox = document.getElementById('consent');
-        const link = document.getElementById('startLink');
+        const startBtn = document.getElementById('startBtn');
+
+        // Enable button when checkbox is checked
         checkbox.onchange = function() {
-            if(this.checked) {
-                link.style.opacity = "1";
-                link.style.pointerEvents = "auto";
-                link.href = "/begin_session/{{ session_id }}";
-            } else {
-                link.style.opacity = "0.5";
-                link.style.pointerEvents = "none";
-                link.href = "#";
+            startBtn.disabled = !this.checked;
+        };
+
+        // Handle Permission and Start
+        startBtn.onclick = async function() {
+            startBtn.innerText = "Requesting Camera...";
+            startBtn.disabled = true;
+
+            try {
+                // Request Camera and Mic
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: true, 
+                    audio: true 
+                });
+                
+                // If successful, stop the tracks immediately so we don't hold the camera 
+                // unnecessarily before the next page loads
+                stream.getTracks().forEach(track => track.stop());
+
+                // Redirect to the interview session
+                window.location.href = "/begin_session/{{ session_id }}";
+
+            } catch (err) {
+                console.error("Permission denied:", err);
+                alert("We need camera and microphone access to continue. Please check your browser settings and try again.");
+                
+                // Reset button
+                startBtn.innerText = "Start Interview";
+                startBtn.disabled = false;
             }
         };
     </script>

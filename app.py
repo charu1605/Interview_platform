@@ -9,6 +9,8 @@ import uuid
 import json
 import os
 from datetime import datetime
+import cloudinary
+import cloudinary.uploader
 import base64
 
 app = Flask(__name__)
@@ -31,6 +33,14 @@ login_manager.login_view = 'login' # Redirects here if not logged in
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
+
+# Configure the SDK using your environment variables
+cloudinary.config(
+    cloud_name=os.getenv("CLOUDINARY_CLOUD_NAME"),
+    api_key=os.getenv("CLOUDINARY_API_KEY"),
+    api_secret=os.getenv("CLOUDINARY_API_SECRET")
+)
+
 
 
 # --- DATABASE MODEL ---
@@ -56,6 +66,7 @@ class Interview(db.Model):
     is_used = db.Column(db.Boolean, default=False)
     created_at = db.Column(db.DateTime, default=datetime.utcnow)
     evaluation_json = db.Column(db.Text, nullable=True)
+    video_url = db.Column(db.String(500), nullable=True)
 
 # Initialize the database
 with app.app_context():
@@ -158,13 +169,20 @@ def create_interviews():
     jd = request.form["jd"]
     names = request.form.getlist("candidate_names[]")
     resume_files = request.files.getlist("resumes[]")
-
+    
+    # Capture the level selected by the recruiter
+    exp_level = request.form.get('experience_level', 'fresher')
+    
     # Zip names and files together to process them as pairs
     for name, resume_file in zip(names, resume_files):
         if name and resume_file and resume_file.filename != '':
             # 1. Process resume
             resume_text = extract_text_from_pdf(resume_file)
-            questions = generate_questions(jd, resume_text)
+            
+            # --- CHANGE: Pass the exp_level to your AI function ---
+            questions = generate_questions(jd, resume_text, exp_level)
+            # ------------------------------------------------------
+            
             session_id = str(uuid.uuid4())
 
             # 2. Save record
@@ -173,14 +191,14 @@ def create_interviews():
                 user_id=current_user.id,
                 candidate_name=name,
                 jd_text=jd,
-                questions_json=json.dumps(questions)
+                questions_json=json.dumps(questions),
+                # PRO TIP: Add this if you want to track the level in your DB
+                # experience_level=exp_level 
             )
             db.session.add(new_interview)
     
     db.session.commit()
-    # Redirect back to the dashboard to see the new links
     return redirect(url_for('recruiter_dashboard'))
-
 @app.route("/interview/<session_id>")
 def start_interview(session_id):
     interview = Interview.query.filter_by(session_id=session_id).first()
@@ -376,6 +394,40 @@ def from_json_filter(s):
     except (json.JSONDecodeError, TypeError):
         return []
 
+
+@app.route('/upload-interview-video', methods=['POST'])
+def upload_interview_video():
+    try:
+        video_file = request.files.get('video')
+        interview_id = request.form.get('interview_id') # This is your session_id
+
+        if not video_file:
+            return jsonify({"status": "error", "message": "No video file received"}), 400
+
+        # Upload the file stream directly to Cloudinary
+        upload_result = cloudinary.uploader.upload(
+            video_file, 
+            resource_type="video",
+            folder="interviews"
+        )
+
+        video_url = upload_result.get('secure_url')
+        print(f"🎥 Success! Video saved at: {video_url}")
+
+        # --- DATABASE UPDATE: SAVE IMMEDIATELY ---
+        # Look up the interview record using the session_id sent by the frontend
+        interview = Interview.query.filter_by(session_id=interview_id).first()
+        if interview:
+            interview.video_url = video_url
+            db.session.commit()
+            print("💾 Video URL permanently linked to database record!")
+        # -----------------------------------------
+
+        return jsonify({"status": "success", "url": video_url})
+
+    except Exception as e:
+        print(f"❌ Cloudinary Upload Error: {e}")
+        return jsonify({"status": "error", "message": str(e)}), 500
 
 if __name__ == "__main__":
     # Get port from environment, default to 5000 for local testing

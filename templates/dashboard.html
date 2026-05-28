@@ -245,14 +245,16 @@ font-weight:600;
 
 textarea,
 input[type="text"],
-input[type="file"]{
-width:100%;
-padding:12px;
-border:none;
-border-radius:8px;
-font-size:0.9rem;
-outline:none;
-margin-top:6px;
+input[type="file"],
+select {
+    width:100%;
+    padding:12px;
+    border:none;
+    border-radius:8px;
+    font-size:0.9rem;
+    outline:none;
+    margin-top:6px;
+    background-color: white; /* Ensures it's easy to read */
 }
 
 textarea{
@@ -401,6 +403,14 @@ text-decoration:underline;
 <div class="form-group">
 <label><strong>Job Description</strong></label>
 <textarea name="jd" rows="4" placeholder="Paste the job requirements here..." required></textarea>
+</div>
+<div class="form-group">
+    <label><strong>Interview Level</strong></label>
+    <select name="experience_level" required>
+        <option value="fresher">Fresher (Fundamental knowledge)</option>
+        <option value="intermediate">Intermediate (Mid-level / Project focused)</option>
+        <option value="senior">Senior (System Design & Leadership)</option>
+    </select>
 </div>
 
 <div id="candidate-list">

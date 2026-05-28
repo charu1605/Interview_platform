@@ -168,6 +168,7 @@ margin-bottom:10px;
 </div>
 
 <video id="webcam" autoplay playsinline muted></video>
+<p id="rec-status" style="margin-top:10px; color:#2ecc71; font-weight:bold; display:none;">● Recording Active</p>
 
 </div>
 
@@ -256,6 +257,8 @@ Your verbal answers will appear here as text...
     let faceViolationCounter = 0;
     let multiFaceStrike = 0; 
     let isInterviewActive = false;
+    let mediaRecorder;
+    let recordedChunks = [];
     const MAX_FACE_STRIKES = 4;
     const PREP_TIME = 20; 
     const RECORD_TIME = 120;
@@ -518,6 +521,12 @@ async function triggerAIJudge() {
             // 3. Start Proctoring Scout
             runFaceAudit(); 
 
+            // Start the recorder
+            mediaRecorder = new MediaRecorder(streamReference, { mimeType: 'video/webm' });
+            mediaRecorder.ondataavailable = (e) => { if (e.data.size > 0) recordedChunks.push(e.data); };
+            mediaRecorder.start();
+            document.getElementById('rec-status').style.display = 'block';
+
             // 4. UI Transition
             actionBtn.style.display = 'none';
             candidateNameInput.style.display = 'none';
@@ -652,11 +661,36 @@ async function triggerAIJudge() {
 
     async function sendAnswersToBackend() {
         isInterviewActive = false; // STOP PROCTORING
-        statusLabel.innerText = "📤 Finalizing...";
-        if (streamReference) {
-            streamReference.getTracks().forEach(track => track.stop());
-            video.srcObject = null;
-        }
+        statusLabel.innerText = "📤 Uploading Video & Answers....";
+        // if (streamReference) {
+        //     streamReference.getTracks().forEach(track => track.stop());
+        //     video.srcObject = null;
+        // }
+
+        // 1. Stop recording
+if (mediaRecorder && mediaRecorder.state !== "inactive") {
+    const waitForRecordingStop = new Promise((resolve) => {
+            mediaRecorder.onstop = resolve;
+        });
+    mediaRecorder.stop();
+    await waitForRecordingStop;
+}
+
+// 2. Prepare the video blob
+const blob = new Blob(recordedChunks, { type: 'video/webm' });
+const formData = new FormData();
+formData.append('video', blob, 'interview.webm');
+formData.append('interview_id', sessionID);
+
+// 3. Upload the video to your Flask route
+try {
+    await fetch('/upload-interview-video', { method: 'POST', body: formData });
+    console.log("Frontend sent video file successfully!");
+} catch (e) {
+    console.error("Video upload failed", e);
+}
+
+
         try {
             const response = await fetch(`/submit_answer/${sessionID}`, {
                 method: "POST",

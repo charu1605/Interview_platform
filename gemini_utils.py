@@ -17,12 +17,12 @@ FLASH_MODEL = "models/gemini-2.5-flash"
 import time
 import json
 
-def generate_questions(jd, resume):
+def generate_questions(jd, resume, experience_level='fresher'):
     # Defining the model outside the retry loop
     # Switching to FLASH_MODEL is good as it's faster and more available
     
     prompt = f"""
-    You are an entry-level technical interviewer. 
+    You are a professional technical interviewer looking for a {experience_level}-level candidate.
     Based on the JD and Resume provided, generate:
     - 2 EASY technical questions
     - 1 EASY behavioral question
